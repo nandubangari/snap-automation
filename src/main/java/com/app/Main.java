@@ -12,7 +12,8 @@ public class Main {
             Snap snap = new Snap();
             snap.clickOnChat();
             snap.clickOnNewChatButton();
-            snap.closeKeyBoard();
             snap.sendMessageToEveryOne();
     }
+
+
 }
