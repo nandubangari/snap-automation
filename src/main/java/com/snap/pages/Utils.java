@@ -11,7 +11,6 @@ import org.openqa.selenium.interactions.Sequence;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.List;
 
 public class Utils {
