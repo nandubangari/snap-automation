@@ -28,7 +28,7 @@ public class Utils {
             System.out.println("Screen width: " + screenWidth);
             System.out.println("Screen height: " + screenHeight);
             int topSafeZone = 500;    // 500 px from top
-            int bottomSafeZone = 100; // 200 px from bottom
+            int bottomSafeZone = 200; // 200 px from bottom
             int maxRetries = 20;      // prevent infinite scroll
 
             for (int attempt = 0; attempt < maxRetries; attempt++) {
@@ -120,9 +120,14 @@ public class Utils {
         // Snapchat package & activity
         options.setAppPackage("com.snapchat.android");
         options.setAppActivity("com.snap.mushroom.MainActivity");
-        options.setNewCommandTimeout(Duration.ofSeconds(600));
+
         options.setCapability("appium:autoGrantPermissions", true);
         options.setCapability("appium:ignoreHiddenApiPolicyError", true);
+
+        options.setCapability("newCommandTimeout", 7200); // 2 hours in seconds
+        options.setCapability("adbExecTimeout", 600000); // 10 min for adb commands
+        options.setCapability("uiautomator2ServerLaunchTimeout", 60000);
+        options.setCapability("uiautomator2ServerInstallTimeout", 60000);
 
         // Stability configs
         options.setNoReset(true);
@@ -134,9 +139,13 @@ public class Utils {
         UiAutomator2Options options = new UiAutomator2Options();
         options.setPlatformName("Android");
         options.setAutomationName("UiAutomator2");
-        options.setNewCommandTimeout(Duration.ofSeconds(600));
         options.setCapability("appium:autoGrantPermissions", true);
         options.setCapability("appium:ignoreHiddenApiPolicyError", true);
+
+        options.setCapability("newCommandTimeout", 7200); // 2 hours in seconds
+        options.setCapability("adbExecTimeout", 600000); // 10 min for adb commands
+        options.setCapability("uiautomator2ServerLaunchTimeout", 60000);
+        options.setCapability("uiautomator2ServerInstallTimeout", 60000);
 
         // Stability configs
         options.setNoReset(true);
@@ -264,6 +273,14 @@ public class Utils {
             driver = repairDriver(driver, e);
             element = driver.findElement(parent);
             return element.findElements(by);
+        }
+    }
+
+    public Boolean isDisplayed(By by) {
+        try {
+            return driver.findElement(by).isDisplayed();
+        } catch (Exception e) {
+            return false;
         }
     }
 

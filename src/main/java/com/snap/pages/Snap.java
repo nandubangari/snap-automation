@@ -64,22 +64,25 @@ public class Snap {
                     System.out.println("Friend: " + friendName);
                     utils.scrollElementIntoViewSafe(friend, friendNameBy);
                     friend.click();
-                    sendMessageOrUnfriend();
+                    sendMessageOrUnfriend(friendName);
                 } catch (WebDriverException e) {
-                    driver = Utils.repairDriver(driver,e);
+                    driver = Utils.repairDriver(driver, e);
                 }
             }
         }
     }
 
 
-    public void sendMessageOrUnfriend() {
+    public void sendMessageOrUnfriend(String name) {
         utils.hideKeyBoard();
         utils.clickElement(chatButtonI);
         try {
-
-            if (utils.findElement(addFriendButton).isDisplayed()) {
-                unfriend();
+            if (utils.isDisplayed(addFriendButton)) {
+                if(!name.toLowerCase().contains("hyderabad")) {
+                    unfriend();
+                }else{
+                    utils.navigateBack();
+                }
             } else {
                 sendMessage();
             }
@@ -95,16 +98,16 @@ public class Snap {
         utils.clickElement(mangeFriendShip);
         utils.clickElement(removeFirend);
         utils.clickElement(remove);
-     utils.navigateBack();
-       utils.navigateBack();
+        utils.navigateBack();
+        utils.navigateBack();
 
         utils.clickElement(newChatButton);
     }
 
     public void sendMessage() {
-        utils.setText(messageField,"Hii, Hloooo, Good morning.");
+        utils.setText(messageField, "Hii, Hloooo, Good morning.");
         utils.pressEnter();
-        utils.setText(messageField,"Eala vunnav em chestunnav?");
+        utils.setText(messageField, "Eala vunnav em chestunnav?");
         utils.pressEnter();
         utils.navigateBack();
         utils.navigateBack();
