@@ -1,5 +1,5 @@
 
-# Snap Mobile Automation Bot - Appium
+# Snap Mobile(Android) Automation Bot - Appium
 
 > Automated Snapchat chat operations (open chat, new chat, send messages, optional unfriend flows) built with **Java + Appium**.  
 > Config-driven, resilient to transient Appium/driver failures, and designed to minimize flaky failures via re-finds, retries, and driver-repair logic.
