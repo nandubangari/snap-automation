@@ -7,6 +7,8 @@ import io.appium.java_client.android.options.UiAutomator2Options;
 import org.openqa.selenium.*;
 import org.openqa.selenium.interactions.PointerInput;
 import org.openqa.selenium.interactions.Sequence;
+import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.WebDriverWait;
 
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -25,8 +27,8 @@ public class Utils {
             Dimension screenSize = getWindowSize();
             int screenWidth = screenSize.getWidth();
             int screenHeight = screenSize.getHeight();
-            System.out.println("Screen width: " + screenWidth);
-            System.out.println("Screen height: " + screenHeight);
+//            System.out.println("Screen width: " + screenWidth);
+//            System.out.println("Screen height: " + screenHeight);
             int topSafeZone = 500;    // 500 px from top
             int bottomSafeZone = 200; // 200 px from bottom
             int maxRetries = 20;      // prevent infinite scroll
@@ -37,7 +39,7 @@ public class Utils {
                 try {
                     // Parse bounds attribute
                     String bounds = element.findElement(innerElement).getAttribute("bounds"); // format: [x1,y1][x2,y2]
-                    System.out.println("Element bounds attribute: " + bounds);
+//                    System.out.println("Element bounds attribute: " + bounds);
                     assert bounds != null;
                     bounds = bounds.replace("[", "").replace("]", ",");
                     String[] parts = bounds.replace("[", "").replace("]", "").split(",");
@@ -55,8 +57,8 @@ public class Utils {
                     elementVisible = visibleVertically && visibleHorizontally;
 
                     // Logging for debugging
-                    System.out.println("Element top-left: (" + x1 + "," + y1 + "), bottom-right: (" + x2 + "," + y2 + ")");
-                    System.out.println("Visible vertically: " + visibleVertically + ", horizontally: " + visibleHorizontally);
+//                    System.out.println("Element top-left: (" + x1 + "," + y1 + "), bottom-right: (" + x2 + "," + y2 + ")");
+//                    System.out.println("Visible vertically: " + visibleVertically + ", horizontally: " + visibleHorizontally);
 
                     if (elementVisible) {
                         System.out.println("Element is in safe viewport, stopping scroll.");
@@ -124,10 +126,10 @@ public class Utils {
         options.setCapability("appium:autoGrantPermissions", true);
         options.setCapability("appium:ignoreHiddenApiPolicyError", true);
 
-        options.setCapability("newCommandTimeout", 7200); // 2 hours in seconds
-        options.setCapability("adbExecTimeout", 600000); // 10 min for adb commands
-        options.setCapability("uiautomator2ServerLaunchTimeout", 60000);
-        options.setCapability("uiautomator2ServerInstallTimeout", 60000);
+        options.setCapability("newCommandTimeout", 86400); // 2 hours in seconds
+        options.setCapability("adbExecTimeout", 8640000); // 10 min for adb commands
+        options.setCapability("uiautomator2ServerLaunchTimeout", 8640000);
+        options.setCapability("uiautomator2ServerInstallTimeout", 8640000);
 
         // Stability configs
         options.setNoReset(true);
@@ -142,10 +144,10 @@ public class Utils {
         options.setCapability("appium:autoGrantPermissions", true);
         options.setCapability("appium:ignoreHiddenApiPolicyError", true);
 
-        options.setCapability("newCommandTimeout", 7200); // 2 hours in seconds
-        options.setCapability("adbExecTimeout", 600000); // 10 min for adb commands
-        options.setCapability("uiautomator2ServerLaunchTimeout", 60000);
-        options.setCapability("uiautomator2ServerInstallTimeout", 60000);
+        options.setCapability("newCommandTimeout", 86400); // 2 hours in seconds
+        options.setCapability("adbExecTimeout", 8640000); // 10 min for adb commands
+        options.setCapability("uiautomator2ServerLaunchTimeout", 8640000);
+        options.setCapability("uiautomator2ServerInstallTimeout", 8640000);
 
         // Stability configs
         options.setNoReset(true);
@@ -174,7 +176,7 @@ public class Utils {
     public static AndroidDriver repairDriver(AndroidDriver driver, Exception e) {
 
 
-        System.out.println("⚠️ Driver session broken: " + e.getMessage());
+        System.out.print("⚠️ Driver session broken: "+ e);
         try {
             driver = repairDriver();
         } catch (MalformedURLException ex) {
@@ -187,8 +189,10 @@ public class Utils {
 
     public void clickElement(By by) {
         try {
+            waitUntilElementPresent(by);
             driver.findElement(by).click();
         } catch (WebDriverException e) {
+            waitUntilElementPresent(by);
             driver = repairDriver(driver, e);
             driver.findElement(by).click();
         }
@@ -196,9 +200,11 @@ public class Utils {
 
     public void setText(By by, String text) {
         try {
+            waitUntilElementPresent(by);
             driver.findElement(by).sendKeys(text);
         } catch (WebDriverException e) {
             driver = repairDriver(driver, e);
+            waitUntilElementPresent(by);
             driver.findElement(by).sendKeys(text);
         }
     }
@@ -240,38 +246,50 @@ public class Utils {
 
     public List<WebElement> findElements(By by) {
         try {
+            waitUntilElementsPresent(by);
             return driver.findElements(by);
         } catch (WebDriverException e) {
             driver = repairDriver(driver, e);
+            waitUntilElementsPresent(by);
             return driver.findElements(by);
         }
     }
 
     public WebElement findElement(By by) {
         try {
+            waitUntilElementPresent(by);
             return driver.findElement(by);
         } catch (WebDriverException e) {
+
             driver = repairDriver(driver, e);
+            waitUntilElementPresent(by);
             return driver.findElement(by);
         }
     }
 
     public WebElement findElement(WebElement element, By by, By parent) {
         try {
+            waitUntilElementPresent(by);
             return element.findElement(by);
         } catch (WebDriverException e) {
+
             driver = repairDriver(driver, e);
+            waitUntilElementPresent(parent);
             element = driver.findElement(parent);
+            waitUntilElementPresent(by);
             return element.findElement(by);
         }
     }
 
     public List<WebElement> findElements(WebElement element, By by, By parent) {
         try {
+            waitUntilElementsPresent(by);
             return element.findElements(by);
         } catch (WebDriverException e) {
             driver = repairDriver(driver, e);
+            waitUntilElementPresent(parent);
             element = driver.findElement(parent);
+            waitUntilElementsPresent(by);
             return element.findElements(by);
         }
     }
@@ -280,9 +298,37 @@ public class Utils {
         try {
             return driver.findElement(by).isDisplayed();
         } catch (Exception e) {
+
             return false;
         }
     }
+
+    /**
+     * Wait until element disappears (invisible or removed from DOM)
+     *
+     * @param locator          The By locator of the element
+     * @param timeoutInSeconds Timeout in seconds
+     */
+    public void waitUntilElementDisappears(By locator, int timeoutInSeconds) {
+        try {
+            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(timeoutInSeconds));
+            wait.until(ExpectedConditions.invisibilityOfElementLocated(locator));
+        } catch (TimeoutException ignored) {
+            ignored.printStackTrace();
+        }
+    }
+
+    public void waitUntilElementPresent(By locator){
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(7));
+        wait.until(ExpectedConditions.presenceOfElementLocated(locator));
+    }
+
+    public void waitUntilElementsPresent(By locator){
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(7));
+        wait.until(ExpectedConditions.presenceOfAllElementsLocatedBy(locator));
+    }
+
+
 
 
 }
