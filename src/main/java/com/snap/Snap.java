@@ -1,15 +1,17 @@
 package com.snap;
 
+import com.utils.ConfigManager;
 import com.utils.Utils;
 import io.appium.java_client.android.AndroidDriver;
 import org.openqa.selenium.*;
+import org.openqa.selenium.NoSuchElementException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.MalformedURLException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class Snap {
     private static final Logger log = LoggerFactory.getLogger(Snap.class);
@@ -40,13 +42,41 @@ public class Snap {
     // Pattern to extract single-char id (fallback)
     private static final Pattern SECTION_ID_PATTERN = Pattern.compile("^([A-Z]|#)$");
 
+    // --- Config-driven fields (loaded in ctor) ---
+    private final List<String> messagesToSend;
+    private final Set<String> sendOnlyToSet;
+    private final boolean unfriendEnabled;
+    private final List<String> unfriendSkipContains;
+
     public Snap() throws MalformedURLException {
         this.driver = Utils.createDriver();
         this.utils = new Utils(this.driver);
         log.info("✅ Snapchat launched successfully!");
+
+        // Load config values via ConfigManager (expects src/main/resources/config.properties on classpath)
+        String rawMessages = ConfigManager.get("message.to.send").trim();
+        if (rawMessages.isEmpty()) {
+            this.messagesToSend = Collections.emptyList();
+        } else {
+            // allow multiple messages separated by "||"
+            this.messagesToSend = Arrays.stream(rawMessages.split("\\|\\|"))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .collect(Collectors.toList());
+        }
+
+        List<String> skipIfContains = ConfigManager.getList("skip.if.contains");
+        this.sendOnlyToSet = ConfigManager.getSetLowerCase("send.only.to");
+        this.unfriendEnabled = ConfigManager.getBoolean("unfriend.enable");
+        this.unfriendSkipContains = ConfigManager.getList("unfriend.skip.if.contains");
+        List<String> dontUnfriendIfLastMessageContains = ConfigManager.getList("dont.unfriend.if.lastMessageContains");
+
+        log.debug("Config loaded: messagesToSend={}, skipIfContains={}, sendOnlyTo={}, unfriendEnabled={}, unfriendSkipContains={}, dontUnfriendIfLastMessageContains={}",
+                messagesToSend.size(), skipIfContains, sendOnlyToSet, unfriendEnabled, unfriendSkipContains, dontUnfriendIfLastMessageContains);
     }
 
     public void clickOnChat() {
+
         utils.clickElement(chatButton);
     }
 
@@ -59,6 +89,7 @@ public class Snap {
      * resource-id in Java (handles cases where matches() isn't supported by the XPath engine).
      */
     private List<WebElement> getSectionsSafe() {
+
         List<WebElement> sections = new ArrayList<>();
         try {
             sections = utils.findElements(sectionsBy);
@@ -83,6 +114,7 @@ public class Snap {
                     String last = rid.contains("/") ? rid.substring(rid.lastIndexOf("/") + 1) : rid;
                     last = last.contains(":") ? last.substring(last.lastIndexOf(":") + 1) : last;
                     if (SECTION_ID_PATTERN.matcher(last).matches()) {
+                        assert sections != null;
                         sections.add(v);
                     }
                 } catch (StaleElementReferenceException see) {
@@ -91,7 +123,7 @@ public class Snap {
             }
         } catch (WebDriverException e) {
             log.warn("Error while gathering fallback sections: {}. Attempting driver repair.", e.getMessage());
-            this.driver = Utils.repairDriverSafely(this.driver, e);
+            this.driver = Utils.repairDriverSafely(e);
             this.utils = new Utils(this.driver);
             // one more try after repair
             try {
@@ -103,6 +135,7 @@ public class Snap {
                         String last = rid.contains("/") ? rid.substring(rid.lastIndexOf("/") + 1) : rid;
                         last = last.contains(":") ? last.substring(last.lastIndexOf(":") + 1) : last;
                         if (SECTION_ID_PATTERN.matcher(last).matches()) {
+                            assert sections != null;
                             sections.add(v);
                         }
                     } catch (StaleElementReferenceException ignored) { }
@@ -111,6 +144,7 @@ public class Snap {
                 log.error("Fallback attempt after repair also failed: {}", ex.getMessage(), ex);
             }
         }
+        assert sections != null;
         log.debug("Sections found via fallback: {}", sections.size());
         return sections;
     }
@@ -138,7 +172,7 @@ public class Snap {
                 }
                 WebElement section = freshSections.get(s);
 
-                List<WebElement> friends = new ArrayList<>();
+                List<WebElement> friends ;
                 try {
                     friends = section.findElements(friendsBy);
                 } catch (StaleElementReferenceException e) {
@@ -152,7 +186,7 @@ public class Snap {
                     friends = section.findElements(friendsBy);
                 } catch (WebDriverException e) {
                     log.warn("Error fetching friends: {}. Repairing driver and retrying.", e.getMessage());
-                    this.driver = Utils.repairDriverSafely(this.driver, e);
+                    this.driver = Utils.repairDriverSafely(e);
                     this.utils = new Utils(this.driver);
                     freshSections = getSectionsSafe();
                     if (s >= freshSections.size()) {
@@ -184,7 +218,7 @@ public class Snap {
                         }
                     } catch (WebDriverException e) {
                         log.warn("Error re-fetching section/friends: {}. Repairing driver.", e.getMessage());
-                        this.driver = Utils.repairDriverSafely(this.driver, e);
+                        this.driver = Utils.repairDriverSafely(e);
                         this.utils = new Utils(this.driver);
                         continue; // try next iteration
                     }
@@ -193,6 +227,9 @@ public class Snap {
                     String friendName;
                     try {
                         friendName = friend.findElement(friendNameBy).getText();
+                        if(!shouldProcessFriend(friendName)){
+                            continue;
+                        }
                     } catch (StaleElementReferenceException | NoSuchElementException ex) {
                         log.debug("Friend element stale when reading name; re-finding friend element");
                         friends = section.findElements(friendsBy);
@@ -211,6 +248,8 @@ public class Snap {
 
                     log.info("Processing friend {} (section {}, index {})", friendName, s + 1, fIndex + 1);
 
+
+
                     // Scroll into view and click
                     try {
                         utils.scrollElementIntoViewSafe(friend, friendNameBy);
@@ -223,7 +262,7 @@ public class Snap {
                         nameEl.click();
                     } catch (WebDriverException clickEx) {
                         log.warn("Failed clicking friend name: {}. Attempting repair and continuing.", clickEx.getMessage());
-                        this.driver = Utils.repairDriverSafely(this.driver, clickEx);
+                        this.driver = Utils.repairDriverSafely(clickEx);
                         this.utils = new Utils(this.driver);
                         safeEnsureNewChatScreen();
                         continue;
@@ -231,16 +270,18 @@ public class Snap {
 
                     // After opening chat, decide to send or unfriend
                     try {
-                        sendMessageOrUnfriend(friendName);
+                        if(sendMessageOrUnfriend(friendName)) {
+                            fIndex--;
+                        }
                     } catch (WebDriverException e) {
                         log.error("Error during send/unfriend for {}: {}. Repairing driver.", friendName, e.getMessage());
-                        this.driver = Utils.repairDriverSafely(this.driver, e);
+                        this.driver = Utils.repairDriverSafely(e);
                         this.utils = new Utils(this.driver);
                     }
                 } // end friends loop
             } catch (Exception outerEx) {
                 log.error("Unexpected error processing section {}: {}", s + 1, outerEx.getMessage(), outerEx);
-                this.driver = Utils.repairDriverSafely(this.driver, outerEx instanceof WebDriverException ? (WebDriverException) outerEx : new WebDriverException(outerEx));
+                this.driver = Utils.repairDriverSafely(outerEx instanceof WebDriverException webDriverException ? webDriverException : new WebDriverException(outerEx));
                 this.utils = new Utils(this.driver);
             }
         } // end sections loop
@@ -262,12 +303,12 @@ public class Snap {
             }
         } catch (WebDriverException e) {
             log.warn("safeEnsureNewChatScreen encountered: {}. Repairing driver.", e.getMessage());
-            this.driver = Utils.repairDriverSafely(this.driver, e);
+            this.driver = Utils.repairDriverSafely(e);
             this.utils = new Utils(this.driver);
         }
     }
 
-    public void sendMessageOrUnfriend(String name) {
+    public boolean sendMessageOrUnfriend(String name) {
         utils.hideKeyBoard();
         utils.clickElement(chatButtonI);
         utils.hideKeyBoard();
@@ -278,23 +319,56 @@ public class Snap {
 
             if (addFriendVisible || !videoCallVisible) {
                 log.info("Not friend: {}", name);
-                if (!name.toLowerCase().contains("hyderabad")) {
-                    unfriend();
-                } else {
+
+                // CONFIG: Only unfriend if enabled AND not protected by rules
+                if (!unfriendEnabled) {
+                    log.info("Unfriend disabled in config; returning to chat list.");
                     safeReturnToNewChat();
+                    return false;
                 }
+
+                // check name-based protection
+                for (String token : unfriendSkipContains) {
+                    if (token != null && !token.isBlank() && name.toLowerCase(Locale.ROOT).contains(token.toLowerCase(Locale.ROOT).trim())) {
+                        log.info("Skipping unfriend for {} because name contains protected token '{}'", name, token);
+                        safeReturnToNewChat();
+                        return false;
+                    }
+                }
+
+                // proceed to unfriend
+                return unfriend();
             } else {
                 log.info("Friend - sending message to {}", name);
-                sendMessage();
+
+                // normalize once
+                String lowerName = name.toLowerCase(Locale.ROOT);
+
+                // check if any token in the set appears inside the friend's name
+                boolean anyTokenMatches = sendOnlyToSet.stream()
+                        .filter(token -> token != null && !token.isBlank())
+                        .map(String::trim)
+                        .anyMatch(token -> lowerName.contains(token.toLowerCase(Locale.ROOT)));
+
+                if (!sendOnlyToSet.isEmpty() && !anyTokenMatches) {
+                    log.info("Skipping send to '{}' because none of send.only.to tokens {} are contained in the name.", name, sendOnlyToSet);
+                    safeReturnToNewChat();
+                    return false;
+                }
+
+                // proceed to send (uses configured messages if present)
+                return sendMessage();
             }
         } catch (Exception e) {
             log.warn("Exception in sendMessageOrUnfriend: {} — attempting sendMessage fallback", e.getMessage());
             try {
-                sendMessage();
+              return sendMessage();
             } catch (Exception ex) {
                 log.error("Fallback sendMessage also failed: {}", ex.getMessage(), ex);
             }
         }
+        return false;
+
     }
 
     private void safeReturnToNewChat() {
@@ -312,33 +386,38 @@ public class Snap {
             else log.warn("Could not return to new chat screen.");
         } catch (WebDriverException e) {
             log.warn("safeReturnToNewChat failed: {}. Repairing driver.", e.getMessage());
-            this.driver = Utils.repairDriverSafely(this.driver, e);
+            this.driver = Utils.repairDriverSafely(e);
             this.utils = new Utils(this.driver);
         }
     }
 
-    public void unfriend() {
+    public boolean unfriend() {
         try {
+
             utils.clickElement(profile);
             utils.waitForSeconds(1);
 
             utils.clickElement(otherOptions);
             utils.waitForSeconds(1);
+            log.info("Doing unfriend...");
+            if(!(utils.isDisplayed(mangeFriendShip) || utils.isDisplayed( removeSwitch))){
+                utils.clickElement(otherOptions);
+                utils.waitForSeconds(1);
+            }
             if (utils.isDisplayed(mangeFriendShip)) {
                 utils.clickElement(mangeFriendShip);
                 utils.waitForSeconds(1);
                 utils.clickElement(removeFirend);
                 utils.waitForSeconds(1);
                 utils.clickElement(remove);
-                utils.waitUntilElementDisappears(remove, 15);
+                utils.waitUntilElementDisappears(remove,15);
             }
-            if (utils.isDisplayed(removeSwitch)) {
+            if (utils.isDisplayed(removeSwitch)){
                 utils.clickElement(removeSwitch);
                 utils.waitForSeconds(1);
                 utils.clickElement(yes);
-                utils.waitUntilElementDisappears(yes, 15);
+                utils.waitUntilElementDisappears(yes,15);
             }
-
             utils.waitForSeconds(1);
             utils.navigateBack();
             utils.waitForSeconds(1);
@@ -346,33 +425,46 @@ public class Snap {
             utils.waitForSeconds(1);
             utils.navigateBack();
             utils.waitForSeconds(1);
-            for (int i = 0; i < 3; i++) {
-                if (utils.isDisplayed(newChatButton)) break;
+            for(int i=0;i<3;i++){
+                if(utils.isDisplayed(newChatButton)){
+                    break;
+                }
                 utils.navigateBack();
-                utils.waitForSeconds(1);
             }
             utils.clickElement(newChatButton);
         } catch (WebDriverException e) {
             log.error("unfriend encountered: {}. Repairing driver.", e.getMessage());
-            this.driver = Utils.repairDriverSafely(this.driver, e);
+            this.driver = Utils.repairDriverSafely(e);
             this.utils = new Utils(this.driver);
         }
+        return true;
     }
 
-    public void sendMessage() {
+    public boolean sendMessage() {
         try {
-            utils.setText(messageField, "Hii, Hloooo, Good morning.");
-            utils.pressEnter();
-            utils.setText(messageField, "Eala vunnav em chestunnav?");
-            utils.pressEnter();
+
+            // Use configured messages if present, otherwise fallback to original hardcoded messages
+            if (!messagesToSend.isEmpty()) {
+                for (String msg : messagesToSend) {
+                    utils.setText(messageField, msg);
+                    utils.pressEnter();
+                    utils.waitForSeconds(1);
+                }
+            } else {
+                log.warn("No message to send");
+            }
+
             utils.navigateBack();
             utils.navigateBack();
             utils.clickElement(newChatButton);
         } catch (WebDriverException e) {
             log.error("sendMessage failed: {}. Repairing driver.", e.getMessage());
-            this.driver = Utils.repairDriverSafely(this.driver, e);
+            this.driver = Utils.repairDriverSafely(e);
             this.utils = new Utils(this.driver);
         }
+
+        return false;
+
     }
 
     /**
@@ -390,4 +482,44 @@ public class Snap {
             driver = null;
         }
     }
+
+    /**
+     * Decide whether to process (send/unfriend) this friend.
+     * Returns false (skip processing) when:
+     *   - global unfriend is disabled AND
+     *   - the friend is NOT in the send.only.to group.
+     * sendOnlyToSet is expected to be lowercase set (ConfigManager.getSetLowerCase).
+     */
+    private boolean shouldProcessFriend(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            log.debug("shouldProcessFriend: empty name -> skip");
+            return false;
+        }
+
+        // normalized friend name lower-case
+        String lowerName = name.toLowerCase(Locale.ROOT).trim();
+
+        // If sendOnlyToSet empty => there is no restriction (treat as "allow all")
+        boolean inSendGroup;
+        if (sendOnlyToSet == null || sendOnlyToSet.isEmpty()) {
+            inSendGroup = true;
+        } else {
+            inSendGroup = sendOnlyToSet.stream()
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(t -> !t.isEmpty())
+                    .anyMatch(lowerName::contains); // token is already lowercase if built via getSetLowerCase
+        }
+
+        // If unfriend disabled AND not in send group -> skip processing
+        if (!unfriendEnabled && !inSendGroup) {
+            log.info("Skipping processing for '{}' because unfriend is disabled and '{}' is not in send.only.to {}",
+                    name, name, sendOnlyToSet);
+            return false;
+        }
+
+        // otherwise process
+        return true;
+    }
+
 }

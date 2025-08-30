@@ -35,8 +35,7 @@ public class Main {
                     Field driverField = Snap.class.getDeclaredField("driver");
                     driverField.setAccessible(true);
                     Object driverObj = driverField.get(snap);
-                    if (driverObj instanceof AndroidDriver) {
-                        AndroidDriver driver = (AndroidDriver) driverObj;
+                    if (driverObj instanceof AndroidDriver driver) {
                         try {
                             log.info("Quitting AndroidDriver session...");
                             driver.quit();
@@ -56,6 +55,8 @@ public class Main {
                 }
             }
             log.info("Exiting process.");
+            assert snap != null;
+            snap.close();
             System.exit(0);
         }
     }

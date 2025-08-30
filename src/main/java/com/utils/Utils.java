@@ -14,12 +14,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 import java.time.Duration;
 import java.util.List;
 import java.util.NoSuchElementException;
-import java.util.function.Function;
-
 public class Utils {
     private static final Logger log = LoggerFactory.getLogger(Utils.class);
 
@@ -45,10 +44,10 @@ public class Utils {
             int screenHeight = screenSize.getHeight();
             int topSafeZone = 500;    // px from top, tune as needed
             int bottomSafeZone = 200; // px from bottom
-            int maxRetries = 20;      // prevent infinite scroll
+            int maxRetries = 5000;      // prevent infinite scroll
 
             for (int attempt = 0; attempt < maxRetries; attempt++) {
-                boolean elementVisible = false;
+                boolean elementVisible ;
                 int elementCenterY = screenHeight / 2;
 
                 try {
@@ -104,7 +103,7 @@ public class Utils {
                     performSafe(swipe);
                 } catch (Exception e) {
                     log.warn("Swipe attempt failed: {}", e.getMessage());
-                    driver = repairDriverSafely(driver, e);
+                    driver = repairDriverSafely( e);
                     performSafe(swipe);
                 }
 
@@ -130,7 +129,7 @@ public class Utils {
             return driver.manage().window().getSize();
         } catch (WebDriverException e) {
             log.warn("getWindowSize raised WebDriverException: {} — attempting repair", e.getMessage());
-            driver = repairDriverSafely(driver, e);
+            driver = repairDriverSafely(e);
             return driver.manage().window().getSize();
         }
     }
@@ -174,19 +173,23 @@ public class Utils {
 
     public static AndroidDriver createDriver() throws MalformedURLException {
         log.info("Creating new AndroidDriver session");
-        return new AndroidDriver(new URL("http://127.0.0.1:4723/"), getUiAutomator2Options());
+        URI uri = URI.create("http://127.0.0.1:4723/"); // no checked exception
+        URL url = uri.toURL(); // may throw MalformedURLException (method already declares it)
+        return new AndroidDriver(url, getUiAutomator2Options());
     }
 
     public static AndroidDriver repairDriver() throws MalformedURLException {
         log.info("Repairing AndroidDriver by creating a fresh session");
-        return new AndroidDriver(new URL("http://127.0.0.1:4723/"), getRepairUiAutomator2Options());
+        URI uri = URI.create("http://127.0.0.1:4723/"); // no checked exception
+        URL url = uri.toURL(); // may throw MalformedURLException (method already declares it)
+        return new AndroidDriver(url, getRepairUiAutomator2Options());
     }
 
     /**
      * Thread-safe driver repair wrapper. Attempts to re-create driver if it's null or session invalid.
      * Limits number of retries to avoid flapping.
      */
-    public static synchronized AndroidDriver repairDriverSafely(AndroidDriver currentDriver, Exception e) {
+    public static synchronized AndroidDriver repairDriverSafely(Exception e) {
         log.warn("⚠️ Driver session broken or threw: {}", e.toString());
         int attempts = 0;
         while (attempts < DRIVER_REPAIR_MAX_RETRIES) {
@@ -223,7 +226,7 @@ public class Utils {
                 log.debug("perform() raised WebDriverException (try {}): {}", tries, e.getMessage());
                 // if it's a session-related exception, try repair once
                 if (tries == 1) {
-                    driver = repairDriverSafely(driver, e);
+                    driver = repairDriverSafely(e);
                     continue;
                 }
                 throw e;
@@ -243,7 +246,7 @@ public class Utils {
                 smallWait();
             } catch (WebDriverException e) {
                 log.error("WebDriverException on clickElement: {}. Attempting repair.", e.getMessage());
-                driver = repairDriverSafely(driver, e);
+                driver = repairDriverSafely(e);
             }
         }
         throw new RuntimeException("clickElement failed after retries: " + by.toString());
@@ -263,7 +266,7 @@ public class Utils {
                 smallWait();
             } catch (WebDriverException e) {
                 log.error("WebDriverException on setText: {}. Attempting repair.", e.getMessage());
-                driver = repairDriverSafely(driver, e);
+                driver = repairDriverSafely(e);
             }
         }
         throw new RuntimeException("setText failed after retries: " + by.toString());
@@ -274,7 +277,7 @@ public class Utils {
             driver.hideKeyboard();
         } catch (WebDriverException e) {
             log.warn("hideKeyboard failed: {}. Trying repair.", e.getMessage());
-            driver = repairDriverSafely(driver, e);
+            driver = repairDriverSafely(e);
             driver.hideKeyboard();
         }
     }
@@ -284,7 +287,7 @@ public class Utils {
             driver.navigate().back();
         } catch (WebDriverException e) {
             log.warn("navigateBack failed: {}. Repairing driver.", e.getMessage());
-            driver = repairDriverSafely(driver, e);
+            driver = repairDriverSafely(e);
             driver.navigate().back();
         }
     }
@@ -294,7 +297,7 @@ public class Utils {
             driver.pressKey(new KeyEvent(AndroidKey.ENTER));
         } catch (WebDriverException e) {
             log.warn("pressEnter failed: {}. Repairing driver.", e.getMessage());
-            driver = repairDriverSafely(driver, e);
+            driver = repairDriverSafely(e);
             driver.pressKey(new KeyEvent(AndroidKey.ENTER));
         }
     }
@@ -313,51 +316,14 @@ public class Utils {
             return driver.findElements(by);
         } catch (WebDriverException e) {
             log.warn("findElements web driver exception: {}. Repairing.", e.getMessage());
-            driver = repairDriverSafely(driver, e);
+            driver = repairDriverSafely(e);
             waitUntilElementsPresent(by);
             return driver.findElements(by);
         }
     }
 
-    public WebElement findElement(By by) {
-        try {
-            waitUntilElementVisible(by, DEFAULT_WAIT);
-            return driver.findElement(by);
-        } catch (WebDriverException e) {
-            log.warn("findElement error: {}. Repairing.", e.getMessage());
-            driver = repairDriverSafely(driver, e);
-            waitUntilElementVisible(by, DEFAULT_WAIT);
-            return driver.findElement(by);
-        }
-    }
 
-    public WebElement findElement(WebElement element, By by, By parent) {
-        try {
-            waitUntilElementVisible(by, DEFAULT_WAIT);
-            return element.findElement(by);
-        } catch (WebDriverException e) {
-            log.warn("findElement within parent failed: {}. Repairing driver & re-finding parent.", e.getMessage());
-            driver = repairDriverSafely(driver, e);
-            waitUntilElementVisible(parent, DEFAULT_WAIT);
-            element = driver.findElement(parent);
-            waitUntilElementVisible(by, DEFAULT_WAIT);
-            return element.findElement(by);
-        }
-    }
 
-    public List<WebElement> findElements(WebElement element, By by, By parent) {
-        try {
-            waitUntilElementsPresent(by);
-            return element.findElements(by);
-        } catch (WebDriverException e) {
-            log.warn("findElements within parent failed: {}. Repairing driver & re-finding parent.", e.getMessage());
-            driver = repairDriverSafely(driver, e);
-            waitUntilElementVisible(parent, DEFAULT_WAIT);
-            element = driver.findElement(parent);
-            waitUntilElementsPresent(by);
-            return element.findElements(by);
-        }
-    }
 
     public Boolean isDisplayed(By by) {
         try {
@@ -377,7 +343,7 @@ public class Utils {
                     .pollingEvery(ACTION_RETRY_INTERVAL)
                     .ignoring(NoSuchElementException.class);
 
-            wait.until((Function<AndroidDriver, Boolean>) d -> {
+            wait.until(d -> {
                 try {
                     List<WebElement> els = d.findElements(locator);
                     return els.isEmpty() || els.stream().noneMatch(WebElement::isDisplayed);
@@ -388,10 +354,6 @@ public class Utils {
         } catch (TimeoutException e) {
             log.warn("waitUntilElementDisappears timed out for {}: {}", locator, e.getMessage());
         }
-    }
-
-    public void waitUntilElementPresent(By locator) {
-        waitUntilElementVisible(locator, DEFAULT_WAIT);
     }
 
     public void waitUntilElementsPresent(By locator) {
@@ -419,4 +381,6 @@ public class Utils {
                     locator, timeout.toSeconds(), e.getMessage());
         }
     }
+
+
 }
