@@ -1,5 +1,5 @@
 
-# Snap Automation Bot — Full Project README
+# Snap Automation Bot - Appium
 
 > Automated Snapchat chat operations (open chat, new chat, send messages, optional unfriend flows) built with **Java + Appium**.  
 > Config-driven, resilient to transient Appium/driver failures, and designed to minimize flaky failures via re-finds, retries, and driver-repair logic.
@@ -64,9 +64,9 @@ project-root/
 │  ├─ main/
 │  │  ├─ java/
 │  │  │  ├─ com/app/Main.java
-│  │  │  ├─ com/app/config/ConfigManager.java
-│  │  │  ├─ com/snap/pages/Snap.java
-│  │  │  └─ com/snap/pages/Utils.java
+│  │  │  ├─ com/snap/Snap.java
+│  │  │  ├─ com/utils/ConfigManager.java
+│  │  │  └─ com/utils/Utils.java
 │  │  └─ resources/
 │  │     ├─ config.properties
 │  │     └─ logback.xml
@@ -83,31 +83,12 @@ Create `src/main/resources/config.properties` and change values to match your en
 # Messaging rules
 message.to.send=Hey! This is an automated test message 🚀
 skip.if.contains=Do not disturb,Busy,Already Sent
-send.only.to=    # optional CSV of friend names or IDs to restrict sends (empty = all)
+# optional: restrict to certain friends, name contains
+send.only.to=
 
-# Unfriend rules
+# ---------- Unfriend Rules ----------
 unfriend.enable=true
 unfriend.skip.if.contains=Best Friend,Pinned,Family
-dont.unfriend.if.lastMessageContains=already sent
-
-# Appium / Device
-appium.server.url=http://127.0.0.1:4723/wd/hub
-platformName=Android
-platformVersion=14
-deviceName=emulator-5554
-automationName=UiAutomator2
-appPackage=com.snapchat.android
-appActivity=com.snap.mushroom.MainActivity
-noReset=true
-
-# Timeouts & retries
-implicitWait=10
-explicitWait=15
-max.retry.count=3
-
-# Logging
-log.dir=logs
-log.level=INFO
 ```
 
 **Notes**
