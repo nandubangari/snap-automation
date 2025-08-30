@@ -1,6 +1,6 @@
 package com.app;
 
-import com.snap.pages.Snap;
+import com.snap.Snap;
 import io.appium.java_client.android.AndroidDriver;
 import org.openqa.selenium.WebDriverException;
 import org.slf4j.Logger;
